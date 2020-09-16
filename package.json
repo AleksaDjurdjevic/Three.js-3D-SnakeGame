@@ -9,11 +9,12 @@
   },
   "dependencies": {
     "core-js": "^3.6.4",
-    "vue": "^2.6.11"
+    "three": "^0.116.1",
+    "vue": "^2.6.11",
+    "vue-threejs": "^0.2.0-alpha.1"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.3.0",
-    "@vue/cli-plugin-eslint": "^4.3.0",
     "@vue/cli-service": "^4.3.0",
     "@vue/eslint-config-airbnb": "^5.0.2",
     "babel-eslint": "^10.1.0",
