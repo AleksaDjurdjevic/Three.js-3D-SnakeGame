@@ -8,8 +8,21 @@
         @load-game="loadGame"
       />
     </paused-wrapper>
-    <div class="score">Your Score: {{score}} Speed: {{Math.floor(speed * 600) + "Km/h"}}</div>
-    <div class="weapons">
+    <transition name="fade-out">
+      <div v-if="notification.message" class="notification" :class="notification.status">{{notification.message}}</div>
+    </transition>
+    <div class="controls-display">
+      <p class="controls">Controls:</p>
+      <p>WSAD: Change Direction</p>
+      <p>Left Click: Speed Boost</p>
+      <!-- <p>Right Click: Place a Bomb</p> -->
+    </div>
+    <div class="score">
+      <p>Score: {{score}}</p>
+      <p style="font-size: 20px; margin: 5px">Speed: {{speedKmH}}</p>
+      <p style="font-size: 20px; margin: 5px">Max Speed: {{maxSpeedKmH}}</p>
+    </div>
+    <!-- <div class="weapons">
       <div class="selected-weapon">
         <span>{{selectedWeapon.name}}</span>
         <img :src="selectedWeapon.iconUrl" alt="">
@@ -19,7 +32,7 @@
           <img :src="weapon.iconUrl" alt="">
         </div>
       </div>
-    </div>
+    </div> -->
   </div>
 </template>
 
@@ -47,19 +60,30 @@ export default {
       originalSpeed: 0.04,
       maxSpeed: 0.2,
       isSpeedingUp: false,
+      notification: {
+        message: '',
+        status: ''
+      },
       weapons: [
         {
           name: 'Bombs',
           iconUrl: require('@/assets/bomb.png'),
+          selected: true,
           activate: () => {
-            let geometry = new Three.BoxGeometry(0.5, 0.5, 0.5);
-            let material = new Three.MeshLambertMaterial({
-              color: 0xFF0000
-            })
-
-            let bomb = new Three.Mesh(geometry, material);
-            this.generateRandomPositionFor(bomb)
-            this.scene.add(bomb);
+            let previousBomb = this.scene.getObjectByName('bomb', true);
+            if (!previousBomb) {
+              let geometry = new Three.BoxGeometry(1.5, 1.5, 1.5);
+              let material = new Three.MeshLambertMaterial({
+                color: 0xFF0000,
+                transparent: true,
+                opacity: 1
+              })
+              let bomb = new Three.Mesh(geometry, material);
+              bomb.name = 'bomb'
+              this.generateRandomPositionFor(bomb)
+              this.scene.add(bomb);
+              this.setNotification('Bomb is chasing you!', 'harm')
+            }
           }
         },
         {
@@ -71,32 +95,26 @@ export default {
           iconUrl: require('@/assets/bomb.png')
         }
       ],
-      selectedWeapon: {
-        name: 'Bombs',
-        iconUrl: require('@/assets/bomb.png'),
-        activate: () => {
-          let previousBomb = this.scene.getObjectByName('bomb', true);
-          if (!previousBomb) {
-            let geometry = new Three.BoxGeometry(3, 3, 3);
-            let material = new Three.MeshLambertMaterial({
-              color: 0xFF0000,
-              transparent: true,
-              opacity: 1
-            })
-            let bomb = new Three.Mesh(geometry, material);
-            bomb.name = 'bomb'
-            this.generateRandomPositionFor(bomb)
-            this.scene.add(bomb);
-          } else {
-            alert("Bomb has already been planted.")
-          }
-        }
-      },
       score: 0,
       direction: 'forwards',
       oldDirection: null,
       paused: false,
       clock: null
+    }
+  },
+  computed: {
+    selectedWeapon() {
+      for (let i=0; i<this.weapons.length; i++) {
+        if (this.weapons[i].selected) {
+          return this.weapons[i];
+        }
+      }
+    },
+    speedKmH() {
+      return Math.floor(this.speed * 600) + "Km/h"
+    },
+    maxSpeedKmH() {
+      return Math.floor(this.maxSpeed * 600) + "Km/h"
     }
   },
   methods: {
@@ -163,10 +181,10 @@ export default {
         };
       }
 
-      if (Math.floor(this.clock.getElapsedTime()) !== 0 && Math.floor(this.clock.getElapsedTime()) % 30 === 0) {
+      if (Math.floor(this.clock.getElapsedTime()) !== 0 && Math.floor(this.clock.getElapsedTime()) % 20 === 0) {
         this.selectedWeapon.activate();
-        alert("Bomb has been planted.")
       }
+      this.chaseSnake();
 
       if (this.isSpeedingUp) {
         this.raiseSpeed();
@@ -197,6 +215,7 @@ export default {
         if (this.isCollisionBetween(this.snakeHead, bomb)) {
           this.score--;
           this.speed = this.originalSpeed;
+          this.maxSpeed -= 0.01;
           if (this.snake.length > 1) {
             this.scene.remove(this.snake[this.snake.length - 1])
             this.snake.pop();
@@ -204,22 +223,34 @@ export default {
           this.scene.remove(bomb);
         }
 
-        bomb.material.opacity -= 0.001;
+        bomb.material.opacity -= 0.002;
         
         if (bomb.material.opacity <= 0) {
           this.scene.remove(bomb);
-          alert("Bomb timed out!")
+          this.setNotification('Bomb timed out, you\'re safe... for now.');
         }
       }
     },
-    raiseSpeed () {
+    chaseSnake() {
+      let bomb = this.scene.getObjectByName('bomb', true);
+      if (bomb) {
+        
+        if (bomb.position.x > this.snakeHead.position.x) bomb.position.x -= this.originalSpeed / 3
+        if (bomb.position.x < this.snakeHead.position.x) bomb.position.x += this.originalSpeed / 3
+        if (bomb.position.y > this.snakeHead.position.y) bomb.position.y -= this.originalSpeed / 3
+        if (bomb.position.y < this.snakeHead.position.y) bomb.position.y += this.originalSpeed / 3
+        if (bomb.position.z > this.snakeHead.position.z) bomb.position.z -= this.originalSpeed / 3
+        if (bomb.position.z < this.snakeHead.position.z) bomb.position.z += this.originalSpeed / 3
+      }
+    },
+    raiseSpeed() {
       if (this.speed > this.maxSpeed) {
         this.speed = this.maxSpeed;
       } else if (this.speed < this.maxSpeed) {
         this.speed += 0.002;
       }
     },
-    dropSpeed () {
+    dropSpeed() {
       if (this.speed < this.originalSpeed) {
         this.speed = this.originalSpeed;
       } else if (this.speed > this.originalSpeed) {
@@ -240,6 +271,7 @@ export default {
       if (bomb) this.scene.remove(bomb)
       this.snake = this.snake.slice(0, 1);
       this.speed = this.originalSpeed;
+      this.maxSpeed = 0.2;
       this.score = 0;
       this.clock.start()
     },
@@ -550,24 +582,9 @@ export default {
       this.resumeGame();
     },
     async saveGame () {
-      console.log(JSON.stringify(this.snake));
-      // const res = await axios.post(this.baseUrl + '/savegame', {
-      //   snake: JSON.stringify(this.snake),
-      //   food: JSON.stringify(this.food),
-      //   score: this.score
-      // })
-
-      // if (res.data.result === 'ok') {
-      //   alert('Game saved successfully');
-      // }
+      
     },
     async loadGame () {
-      const res = await axios.get(this.baseUrl + '/loadgame')
-      this.snake = JSON.parse(res.data.saved_games[0].sav_snake)
-      this.food = JSON.parse(res.data.saved_games[0].sav_food)
-      this.score = res.data.saved_games[0].sav_score;
-      console.log(this.snake);
-      throw new Error("Something went badly wrong!");
     },
     sendCoordinates(){
       this.snake[1].coordinates = {
@@ -580,67 +597,113 @@ export default {
     setFocus() {
       this.$refs.game.focus();
     },
+    setNotification(message, status = 'safe') {
+      this.notification.message = message;
+      this.notification.status = status;
+      setTimeout(() => {
+        this.notification.message = '';
+        this.notification.status = 'safe'
+      }, 2000)
+    }
   },
   mounted() {
     this.init();
     this.animate();
     this.setFocus();
 
-    window.oncontextmenu = () => {
-      this.selectedWeapon.activate();
-      return false;
-    }
+    // window.oncontextmenu = () => {
+    //   this.selectedWeapon.activate();
+    //   return false;
+    // }
   }
 }
 </script>
 
 <style scoped lang="scss">
-#container{
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
-  position: relative;
-}
-.score{
-  position: absolute; 
-  left: 0; 
-  right: 0; 
-  margin: 0 auto;
-  /* width: 500px; */
-  font-size: 3em;
-  user-select: none;
-}
-.weapons {
-  width: 20%;
-  display: flex;
-  position: absolute; 
-  top: 30%; 
-  right: 10%; 
-  margin: auto 0;
-  font-size: 3em;
-  user-select: none;
-
-  .selected-weapon {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 80%;
-    font-size: 0.5em;
-    img {
-      width: 88px;
-      height: 88px;
-    }
+  #container{
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
   }
-  .all-weapons {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+  .score{
+    position: absolute; 
+    left: 0; 
+    right: 0; 
+    margin: 0 auto;
+    font-size: 3em;
+    user-select: none;
+  }
+  .controls-display {
     width: 20%;
-
-    img {
-      width: 44px;
-      height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    position: absolute; 
+    top: 30%; 
+    left: 2%; 
+    margin: auto 0;
+    font-size: 1em;
+    user-select: none;
+    p.controls {
+      font-size: 1.2em;
+      font-weight: 600;
     }
   }
-}
+  .weapons {
+    width: 20%;
+    display: flex;
+    position: absolute; 
+    top: 30%; 
+    right: 10%; 
+    margin: auto 0;
+    font-size: 3em;
+    user-select: none;
+
+    .selected-weapon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 80%;
+      font-size: 0.5em;
+      img {
+        width: 88px;
+        height: 88px;
+      }
+    }
+    .all-weapons {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 20%;
+
+      img {
+        width: 44px;
+        height: 44px;
+      }
+    }
+  }
+  .notification {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3em;
+  }
+  .notification.harm {
+    color: red;
+  }
+  .notification.safe {
+    color: green;
+  }
+  // TRANSITIONS //
+  .fade-out-enter,
+  .fade-out-leave-to {
+    opacity: 0;
+  }
+
+  .fade-out-enter-active,
+  .fade-out-leave-active {
+    transition: opacity 2s ease-in;
+  }
 </style>
